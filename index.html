@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kyoto & Tokyo Trip Planner</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: one-column phone app. Sticky header with a day strip, one day at a time, bottom tab bar. */
+:root{
+  --paper:#f3f4f7; --card:#ffffff; --ink:#15213a; --muted:#5b6880; --line:#dde2ea;
+  --accent:#d43a22; --accent-soft:#fbe9e5; --kyoto:#6d46a8; --kyoto-soft:#efe9f8; --tokyo:#1f5fa6; --tokyo-soft:#e5eef9;
+  --warn:#9a5b00; --warn-soft:#fff3d6; --ok:#1d7a46;
+  --display:"Dela Gothic One", "Hiragino Sans", system-ui, sans-serif;
+  --body:"Zen Kaku Gothic New", "Hiragino Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e1421; --card:#182131; --ink:#e7ebf3; --muted:#9ba7bb; --line:#2a3447;
+    --accent:#ff6b4f; --accent-soft:#3a1f1b; --kyoto:#b693f0; --kyoto-soft:#2a2240; --tokyo:#7fb2f0; --tokyo-soft:#1a2a44;
+    --warn:#ffc964; --warn-soft:#3a2e12; --ok:#5fd394; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e1421; --card:#182131; --ink:#e7ebf3; --muted:#9ba7bb; --line:#2a3447;
+  --accent:#ff6b4f; --accent-soft:#3a1f1b; --kyoto:#b693f0; --kyoto-soft:#2a2240; --tokyo:#7fb2f0; --tokyo-soft:#1a2a44;
+  --warn:#ffc964; --warn-soft:#3a2e12; --ok:#5fd394; color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--tokyo)}
+.app{max-width:560px;margin:0 auto;min-height:100%;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+
+header{position:sticky;top:0;z-index:5;background:var(--paper);padding:calc(10px + env(safe-area-inset-top)) 0 8px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;justify-content:space-between;padding:0 16px 8px}
+.brand h1{font-family:var(--display);font-weight:400;font-size:20px;margin:0;letter-spacing:.01em}
+.brand span{font-size:13px;color:var(--muted)}
+.strip{display:flex;gap:6px;overflow-x:auto;padding:2px 16px 4px;scrollbar-width:none}
+.strip::-webkit-scrollbar{display:none}
+.chip-day{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;min-width:50px;padding:6px 4px 5px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.chip-day b{font-family:var(--display);font-weight:400;font-size:18px;line-height:1.1}
+.chip-day small{font-size:11px;color:var(--muted)}
+.chip-day i{width:6px;height:6px;border-radius:50%;margin-top:3px;background:var(--tokyo)}
+.chip-day.kyoto i{background:var(--kyoto)}
+.chip-day.travel i{background:linear-gradient(90deg,var(--kyoto) 50%,var(--tokyo) 50%)}
+.chip-day.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.chip-day.on small{color:var(--paper);opacity:.8}
+.chip-day.flag{box-shadow:inset 0 -3px 0 var(--warn)}
+
+main{padding:14px 16px 24px;display:flex;flex-direction:column;gap:16px}
+.dayhead{display:flex;gap:14px;align-items:center}
+.datebox{flex:0 0 auto;width:64px;height:64px;border-radius:16px;background:var(--tokyo-soft);color:var(--tokyo);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.datebox.kyoto{background:var(--kyoto-soft);color:var(--kyoto)}
+.datebox b{font-family:var(--display);font-weight:400;font-size:28px;line-height:1}
+.datebox small{font-size:12px;font-weight:700}
+.dayhead h2{font-size:21px;margin:2px 0 0;line-height:1.2;text-wrap:balance}
+.citytag{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px;min-height:40px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ghost{background:transparent}
+.btn[disabled]{opacity:.45;cursor:default}
+.lockline{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+.warn{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.warn b{font-weight:700}
+
+.sec{display:flex;flex-direction:column;gap:8px}
+.sec h3{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:4px 0 0;display:flex;justify-content:space-between;align-items:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+.meal{display:grid;grid-template-columns:62px 1fr auto auto;align-items:center;gap:10px;padding:10px 10px 10px 12px;width:100%;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:14px;min-height:60px}
+.meal .slot{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--accent);text-align:center;line-height:1.2}
+.meal .what{display:flex;flex-direction:column;min-width:0}
+.meal .what strong{font-weight:700;overflow-wrap:anywhere}
+.meal .what span{font-size:13px;color:var(--muted)}
+.meal .empty{color:var(--muted);font-style:normal}
+.meal .chev{font-size:13px;color:var(--muted);white-space:nowrap}
+
+.act{padding:12px;display:flex;flex-direction:column;gap:8px}
+.act-top{display:flex;gap:10px;align-items:flex-start}
+.num{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--paper);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.act-body{flex:1;min-width:0}
+.act-body strong{display:block;font-weight:700;overflow-wrap:anywhere}
+.act-body p{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.tag.closed{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.tag.where{background:var(--tokyo-soft);color:var(--tokyo);border-color:transparent}
+.tag.where.kyoto{background:var(--kyoto-soft);color:var(--kyoto)}
+.act-tools{display:flex;gap:5px;justify-content:flex-end}
+.icon{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--paper);display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+.icon.txt{width:auto;padding:0 12px;font-size:13px;font-weight:500}
+.icon[disabled]{opacity:.35;cursor:default}
+.emptynote{padding:14px;color:var(--muted);font-size:14px;text-align:center;border:1px dashed var(--line);border-radius:14px}
+
+.sug{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px}
+.sug .act-body strong{font-size:15px}
+.add{flex:0 0 auto;width:40px;height:40px;border-radius:50%;border:none;background:var(--accent-soft);color:var(--accent);font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center}
+
+.pager{display:flex;justify-content:space-between;gap:8px}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+nav.tabs button{border:none;background:none;padding:8px 4px;border-radius:12px;font-size:13px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
+
+.filters{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.filters::-webkit-scrollbar{display:none}
+.fchip{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 13px;font-size:14px;font-weight:500;min-height:38px}
+.fchip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.lead{margin:0;font-size:15px;color:var(--muted)}
+
+.book{display:flex;gap:12px;align-items:flex-start;padding:12px}
+.book input{width:22px;height:22px;margin:2px 0 0;accent-color:var(--accent);flex:0 0 auto}
+.book label{flex:1;min-width:0}
+.book strong{display:block}
+.book p{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.book.done strong{text-decoration:line-through;color:var(--muted)}
+
+.scrim{position:fixed;inset:0;background:rgba(10,15,25,.45);z-index:20;display:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--paper);border-radius:20px 20px 0 0;max-height:86%;display:none;flex-direction:column;max-width:560px;margin:0 auto;box-shadow:0 -10px 30px rgba(0,0,0,.18)}
+.open .scrim{display:block}
+.open .sheet{display:flex}
+.sheet-head{padding:10px 16px 10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
+.sheet-head .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sheet-head h4{margin:0;font-size:18px}
+.sheet-body{overflow-y:auto;padding:12px 16px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+.sheet-body h5{margin:8px 0 0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pick{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 12px;border:1px solid var(--line);background:var(--card);border-radius:14px}
+.pick.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.pick .act-body p{font-size:13px}
+.dayrow{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.dayrow .act-body{min-width:0}
+.dayrow .row{justify-content:flex-end;flex-wrap:nowrap}
+.mini{min-width:44px;min-height:38px;border-radius:10px;border:1px solid var(--line);background:var(--paper);font-size:13px;font-weight:700}
+.mini.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.own{display:flex;gap:8px}
+.own input{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 12px;font:inherit;font-size:16px}
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90%;text-align:center}
+.toast.show{opacity:1}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+.lnks{display:flex;gap:6px;margin-right:auto;flex-wrap:wrap}
+.sug .lnks{margin-top:8px}
+.lnk{font-size:13px;font-weight:700;color:var(--tokyo);text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:7px 9px;background:var(--paper);min-height:36px;display:inline-flex;align-items:center}
+.act-tools{flex-wrap:wrap;align-items:center}
+.gmap{text-decoration:none;justify-content:center;width:100%;min-height:48px;font-size:15px}
+.tag.who-kids{background:#fde4ef;color:#a3215e;border-color:transparent}
+.tag.who-dad{background:#fff0d6;color:#9a4b00;border-color:transparent}
+.tag.who-everyone{background:var(--paper)}
+.tag.dish{border-color:transparent}
+.d-ramen{background:#fde7d9;color:#9a3d0c} .d-oden{background:#efe6d3;color:#6b4e12} .d-udon{background:#e6f1e2;color:#2f6a24} .d-tonkatsu{background:#f6e7c8;color:#7a5200} .d-other{background:var(--paper);color:var(--muted)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tag.who-kids{background:#3d1a2c;color:#ff9cc8}:root:not([data-theme="light"]) .tag.who-dad{background:#3a2a10;color:#ffc46b}:root:not([data-theme="light"]) .d-ramen{background:#3b2216;color:#ffb38a}:root:not([data-theme="light"]) .d-oden{background:#332b1b;color:#e2c58a}:root:not([data-theme="light"]) .d-udon{background:#1e3220;color:#9fdb8f}:root:not([data-theme="light"]) .d-tonkatsu{background:#382d14;color:#f1c768}}
+:root[data-theme="dark"] .tag.who-kids{background:#3d1a2c;color:#ff9cc8}:root[data-theme="dark"] .tag.who-dad{background:#3a2a10;color:#ffc46b}:root[data-theme="dark"] .d-ramen{background:#3b2216;color:#ffb38a}:root[data-theme="dark"] .d-oden{background:#332b1b;color:#e2c58a}:root[data-theme="dark"] .d-udon{background:#1e3220;color:#9fdb8f}:root[data-theme="dark"] .d-tonkatsu{background:#382d14;color:#f1c768}
+.lmap{height:320px;width:100%;background:var(--paper);z-index:1}
+.pin{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 12px/1 var(--body);color:#fff;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.pin-a{background:#15213a}.pin-m{background:#d43a22}.pin-h{border-radius:8px;background:#1f5fa6}.pin-h.kyoto{background:#6d46a8}
+.pop{display:flex;flex-direction:column;gap:4px;min-width:180px;font-family:var(--body)}
+.pop strong{font-size:14px}.pop-d{font-size:12px;color:#5b6880}
+.pop-b{display:flex;gap:6px;margin-top:4px}.pop-b a,.pop-b button{font:700 13px var(--body);padding:7px 12px;border-radius:999px;border:1px solid #dde2ea;background:#fff;color:#15213a;text-decoration:none}
+.pop-b button{background:#d43a22;border-color:#d43a22;color:#fff}
+.ph{display:none;flex:0 0 auto;width:76px;height:76px;border-radius:12px;background:var(--line) center/cover no-repeat}
+.ph.on{display:block}
+.pop-ph{width:100%;height:110px;margin-bottom:4px}
+.meal .ph{width:46px;height:46px;border-radius:10px}
+.foot{font-size:12px;color:var(--muted);text-align:center;padding:6px 0 0}
+.linkbtn{border:none;background:none;color:var(--accent);font-size:13px;font-weight:700;letter-spacing:0;text-transform:none;padding:6px 0;min-height:32px}
+.mapcard{overflow:hidden}
+.mapcard > svg{display:block;width:100%;height:auto;font-family:var(--body);touch-action:manipulation}
+.m-bg{fill:var(--paper)}
+.m-ring{fill:none;stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 4}
+.m-ringt{fill:var(--muted);font-size:10px}
+.m-lm{fill:var(--muted);font-size:10px;font-weight:500}
+.m-lmdot{fill:var(--muted);opacity:.45}
+.m-act,.m-meal,.m-near{cursor:pointer}
+.m-act circle{fill:var(--ink)} .m-act text{fill:var(--paper)}
+.m-meal circle{fill:var(--accent)} .m-meal text{fill:#fff}
+.m-act text,.m-meal text{font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.m-near circle{fill:var(--muted);opacity:.6} .m-near circle.hit{fill:transparent;opacity:1}
+.m-sel{fill:none !important;stroke:var(--accent);stroke-width:3}
+.m-hotel rect{fill:var(--tokyo)} .kyoto .m-hotel rect{fill:var(--kyoto)}
+.m-house{fill:#fff}
+.m-scale{stroke:var(--ink);stroke-width:2}
+.m-scalet{fill:var(--ink);font-size:10px;font-weight:700;text-anchor:middle}
+.mapcap{padding:10px 12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
+.mapcap p{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.mapcap a.btn{text-decoration:none;color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding:0 12px 10px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.lg-h{background:var(--tokyo);border-radius:3px !important} .kyoto .lg-h{background:var(--kyoto)}
+.lg-a{background:var(--ink)} .lg-m{background:var(--accent)} .lg-n{background:var(--muted);opacity:.6}
+.train{padding:14px;display:flex;flex-direction:column;gap:10px}
+.train .th{margin:0;font-size:17px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.tips{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.tablewrap{overflow-x:auto}
+.train table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.train th{text-align:left;font-size:12px;color:var(--muted);font-weight:700;padding:6px 6px 6px 0;border-bottom:1px solid var(--line)}
+.train td{padding:8px 6px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.train td small{color:var(--muted)}
+.train a.btn{align-self:flex-start;text-decoration:none;color:#fff}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="brand"><h1>Kyoto &amp; Tokyo</h1><span>Nov 10 – 20, 2026</span></div>
+    <div class="strip" id="strip" role="tablist" aria-label="Trip days"></div>
+  </header>
+  <main id="main"></main>
+</div>
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <button id="tab-plan" data-act="tab" data-tab="plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Days</button>
+  <button id="tab-explore" data-act="tab" data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Explore</button>
+  <button id="tab-book" data-act="tab" data-tab="book"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12l5 5L20 6"/></svg>Bookings</button>
+</div></nav>
+<div id="sheetwrap"><div class="scrim" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------- Library: every place you can plan ---------- */
+const AREAS = {
+  central:"Downtown Kyoto", station:"Kyoto Station", nijo:"Nijo Castle", fushimi:"Fushimi Inari", higashiyama:"Higashiyama / Gion", arashiyama:"Arashiyama", uji:"Uji",
+  tokyost:"Tokyo Station / Ginza", shinjuku:"Shinjuku", shibuya:"Shibuya / Harajuku", akihabara:"Akihabara / Ueno", asakusa:"Asakusa", nakano:"Nakano / Mitaka", odaiba:"Toyosu / Odaiba", ikebukuro:"Ikebukuro", tama:"Tama Center", yomiuri:"Yomiuriland", disney:"Tokyo Disney Resort", any:"Anywhere"
+};
+const CATS = {food:"Food", kids:"Kids", otaku:"Anime & games", sight:"Sights", travel:"Travel"};
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DOWL = ["Sundays","Mondays","Tuesdays","Wednesdays","Thursdays","Fridays","Saturdays"];
+
+const LIB = [
+ // Kyoto food
+ {id:"k-inoda",tag:"Coffee & breakfast",n:"Inoda Coffee Honten",c:"kyoto",a:"central",k:["food"],m:["b","l"],d:"Classic Kyoto coffee house; the Kyoto breakfast plate is the move. Opens early."},
+ {id:"k-daiichi",n:"Honke Daiichi Asahi",c:"kyoto",a:"station",k:["food"],m:["b","l","d"],d:"Kyoto soy-and-pork ramen. Opens early, so ramen for breakfast works. Expect a line.",tag:"Ramen"},
+ {id:"k-katsu",n:"Katsukura Sanjo",c:"kyoto",a:"central",k:["food"],m:["l","d"],d:"Tonkatsu; grind your own sesame for the sauce. Free refills of rice, miso and cabbage.",tag:"Tonkatsu"},
+ {id:"k-katsuporta",n:"Katsukura, Kyoto Station",c:"kyoto",a:"station",k:["food"],m:["l","d"],d:"Same tonkatsu in the Porta basement. Handy before a train.",tag:"Tonkatsu"},
+ {id:"k-menbaka",n:"Menbaka Fire Ramen",c:"kyoto",a:"nijo",k:["food","kids"],m:["l","d"],d:"The chef sets the green-onion oil on fire at your table.",closed:[2],tag:"Ramen"},
+ {id:"k-koji",n:"Kyoto Ramen Koji",c:"kyoto",a:"station",k:["food"],m:["l","d"],d:"A whole floor of ramen shops on Kyoto Station's 10th floor. Everyone picks their own.",tag:"Ramen"},
+ {id:"k-omen",n:"Omen, Ginkaku-ji",c:"kyoto",a:"higashiyama",k:["food"],m:["l","d"],d:"Hand-cut udon dipped in sesame broth with seasonal vegetables.",tag:"Udon"},
+ {id:"k-kuon",n:"Kyoto Shijo Kuon",c:"kyoto",a:"central",k:["food"],m:["l","d"],d:"Curry udon in a converted kimono shop.",tag:"Udon"},
+ {id:"k-nishikifood",tag:"Market snacks",n:"Nishiki Market snacks",c:"kyoto",a:"central",k:["food","kids"],m:["l"],d:"Graze on skewers, tamagoyaki and mochi. Most stalls open around 10:00."},
+ {id:"k-inariudon",n:"Kitsune udon at Fushimi Inari",c:"kyoto",a:"fushimi",k:["food"],m:["b","l"],d:"Udon with sweet fried tofu, the fox's favorite, from shops by the shrine gate.",tag:"Udon"},
+ {id:"k-ekiben",tag:"Bento",n:"Ekiben on the shinkansen",c:"kyoto",a:"station",k:["food","kids"],m:["l"],d:"Pick boxed lunches at Kyoto Station and eat them on the train. Some come in shinkansen-shaped boxes."},
+ // Kyoto activities
+ {id:"k-manga",n:"Kyoto International Manga Museum",c:"kyoto",a:"central",k:["otaku"],d:"A 200 m wall of manga you can pull down and read. 10:00–17:00, last entry 16:30.",closed:[3]},
+ {id:"k-nishiki",n:"Nishiki Market",c:"kyoto",a:"central",k:["sight","kids"],d:"Covered food market, five blocks long."},
+ {id:"k-pokemon",n:"Pokémon Center Kyoto",c:"kyoto",a:"central",k:["kids","otaku"],d:"Inside Takashimaya at Shijo Kawaramachi, a few minutes from Nishiki."},
+ {id:"k-inari",n:"Fushimi Inari Taisha",c:"kyoto",a:"fushimi",k:["sight","kids"],d:"Tunnels of orange gates up the mountain. Open 24 hours; go early for photos."},
+ {id:"k-nijo",n:"Nijo Castle",c:"kyoto",a:"nijo",k:["sight","kids"],d:"Shogun's castle with squeaky 'nightingale' floors that kids love."},
+ {id:"k-kiyomizu",n:"Kiyomizu-dera & Higashiyama lanes",c:"kyoto",a:"higashiyama",k:["sight"],d:"Wooden temple stage over the city, then old shopping lanes downhill."},
+ {id:"k-gion",n:"Gion evening walk",c:"kyoto",a:"higashiyama",k:["sight"],d:"Lantern-lit lanes and teahouses after dark."},
+ {id:"k-arashiyama",n:"Arashiyama bamboo & monkey park",c:"kyoto",a:"arashiyama",k:["sight","kids"],d:"Bamboo grove, then a hill where you feed the monkeys from inside a hut."},
+ {id:"k-railway",n:"Kyoto Railway Museum",c:"kyoto",a:"station",k:["kids"],d:"Real shinkansen and steam trains, plus driving simulators.",closed:[3]},
+ {id:"k-nintendo",n:"Nintendo Museum",c:"kyoto",a:"uji",k:["otaku","kids"],d:"Nintendo history and playable exhibits in Uji. Advance lottery tickets only."},
+ // Travel
+ {id:"t-shinkansen",n:"Shinkansen to Tokyo",c:"kyoto",a:"station",k:["travel"],d:"Nozomi, about 2h15m. Book seat E, the Mt Fuji side, in either direction."},
+ // Near the hotels
+ {id:"k-hotel",tag:"Breakfast",n:"Breakfast at the Kyoto stay",c:"kyoto",a:"central",k:["food","kids"],m:["b"],d:"No breakfast served, but there's a shared kitchen: grab bread and fruit from a convenience store or bakery the night before."},
+ {id:"k-gosho",n:"Kyoto Imperial Palace Park",c:"kyoto",a:"central",k:["sight","kids"],d:"Huge open park with gravel paths and space to run, a short walk from the hotel."},
+ {id:"t-hotel",tag:"Breakfast",n:"Breakfast near the Tokyo stay",c:"tokyo",a:"shibuya",k:["food","kids"],m:["b"],d:"A diner by the hotel serves a paid breakfast, or use your room's microwave and kitchenette."},
+ {id:"t-santouka",n:"Ramen Santouka Shibuya",c:"tokyo",a:"shibuya",k:["food"],m:["l","d"],d:"Hokkaido-style shio ramen, about a 4-minute walk from the hotel.",tag:"Ramen"},
+ {id:"t-ichishibuya",n:"Ichiran Shibuya",c:"tokyo",a:"shibuya",k:["food","kids"],m:["b","l","d"],d:"Solo-booth tonkotsu ramen near the Scramble; good for a late dinner.",tag:"Ramen"},
+ // Anywhere
+ {id:"x-hotel",tag:"Breakfast",n:"Hotel breakfast",c:"any",a:"any",k:["food"],m:["b"],d:"Easiest start on early days."},
+ {id:"x-konbini",n:"Convenience store breakfast",c:"any",a:"any",k:["food","kids"],m:["b","l"],d:"Onigiri, egg sandwiches and hot oden from 7-Eleven, Lawson or FamilyMart.",tag:"Oden"},
+ {id:"x-gyudon",tag:"Gyudon",n:"Gyudon breakfast set",c:"any",a:"any",k:["food"],m:["b","l","d"],d:"Matsuya or Yoshinoya: rice, egg, miso and grilled fish or beef, cheap and fast."},
+ {id:"x-ichiran",n:"Ichiran",c:"any",a:"any",k:["food","kids"],m:["l","d"],d:"Tonkotsu ramen in solo booths with an English order sheet. Branches everywhere.",tag:"Ramen"},
+ {id:"x-kura",tag:"Sushi",n:"Kura Sushi",c:"any",a:"any",k:["food","kids"],m:["l","d"],d:"Conveyor-belt sushi; every 5 plates plays a game that can win a capsule toy."},
+ // Tokyo food
+ {id:"t-komeda",tag:"Coffee & breakfast",n:"Komeda's Coffee morning set",c:"tokyo",a:"any",k:["food"],m:["b"],d:"Order a drink before 11:00 and toast and egg come free."},
+ {id:"t-tsukiji",tag:"Sushi & market",n:"Tsukiji Outer Market",c:"tokyo",a:"tokyost",k:["food","kids"],m:["b","l"],d:"Sushi breakfast, tamagoyaki on a stick, grilled scallops.",closed:[0,3],soft:true},
+ {id:"t-bills",tag:"Pancakes",n:"bills Omotesando",c:"tokyo",a:"shibuya",k:["food"],m:["b","l"],d:"Ricotta pancakes; a good slow breakfast before Harajuku."},
+ {id:"t-asasnack",tag:"Street snacks",n:"Nakamise street snacks",c:"tokyo",a:"asakusa",k:["food","kids"],m:["b","l"],d:"Melon pan, ningyo-yaki cakes and rice crackers on the way to Senso-ji."},
+ {id:"t-ramenst",n:"Tokyo Ramen Street",c:"tokyo",a:"tokyost",k:["food"],m:["l","d"],d:"Eight famous ramen shops in Tokyo Station's basement.",tag:"Ramen"},
+ {id:"t-otakohon",n:"Otako Honten",c:"tokyo",a:"tokyost",k:["food"],m:["d"],d:"The original Otako oden house in Nihonbashi, near Tokyo Station.",tag:"Oden"},
+ {id:"t-depachika",tag:"Bento & sweets",n:"Depachika food hall (Daimaru Tokyo)",c:"tokyo",a:"tokyost",k:["food","kids"],m:["l","d"],d:"Department-store basement of bento, sweets and snacks. Great for the trip home."},
+ {id:"t-otako",n:"Otako Shinjuku",c:"tokyo",a:"shinjuku",k:["food"],m:["d"],d:"Kanto-style oden by Golden Gai, with dozens of pieces to pick from.",closed:[3],tag:"Oden"},
+ {id:"t-udonshin",n:"Udon Shin",c:"tokyo",a:"shinjuku",k:["food"],m:["l","d"],d:"Udon made to order. Arrive early or expect a long wait.",tag:"Udon"},
+ {id:"t-fuunji",n:"Fuunji",c:"tokyo",a:"shinjuku",k:["food"],m:["l","d"],d:"Rich chicken-and-fish tsukemen (dipping ramen).",tag:"Ramen"},
+ {id:"t-omoide",tag:"Yakitori",n:"Omoide Yokocho",c:"tokyo",a:"shinjuku",k:["food"],m:["d"],d:"Tiny yakitori stalls in a smoky alley by Shinjuku Station."},
+ {id:"t-maisen",n:"Maisen Aoyama",c:"tokyo",a:"shibuya",k:["food","kids"],m:["l","d"],d:"Famous tonkatsu in a former bathhouse.",tag:"Tonkatsu"},
+ {id:"t-marugo",n:"Tonkatsu Marugo",c:"tokyo",a:"akihabara",k:["food"],m:["l","d"],d:"Thick-cut pork in the middle of the gaming district.",tag:"Tonkatsu"},
+ {id:"t-otafuku",n:"Otafuku",c:"tokyo",a:"asakusa",k:["food"],m:["d"],d:"Oden since 1915. Small, so reserve. Opens 16:00 on Sundays.",closed:[1],tag:"Oden"},
+ {id:"t-monja",tag:"Monjayaki",n:"Monjayaki in Tsukishima",c:"tokyo",a:"odaiba",k:["food","kids"],m:["l","d"],d:"A street of shops where you cook monja on a table griddle. Kids love it."},
+ {id:"t-aoba",n:"Nakano Aoba",c:"tokyo",a:"nakano",k:["food"],m:["l","d"],d:"Famous double-soup ramen, steps from Nakano Broadway.",tag:"Ramen"},
+ {id:"t-mutekiya",n:"Mutekiya",c:"tokyo",a:"ikebukuro",k:["food"],m:["l","d"],d:"Thick tonkotsu ramen with a reliably long line.",tag:"Ramen"},
+ {id:"t-purofood",tag:"Character food",n:"Character food at Puroland",c:"tokyo",a:"tama",k:["food","kids"],m:["l"],d:"Hello Kitty and friends on your plate, inside the park."},
+ {id:"t-disfood",tag:"Park food",n:"Disney park food & Christmas snacks",c:"tokyo",a:"disney",k:["food","kids"],m:["b","l","d"],d:"Order ahead in the app to skip food lines."},
+ // Tokyo activities
+ {id:"t-dbstore",n:"Dragon Ball Store Tokyo",c:"tokyo",a:"tokyost",k:["otaku"],d:"World's first official Dragon Ball store, First Avenue 1F. Store-only goods. 10:00–20:30."},
+ {id:"t-charst",n:"Character Street & Jump Shop",c:"tokyo",a:"tokyost",k:["kids","otaku"],d:"Hello Kitty, Pokémon, Ghibli and Shonen Jump shops in one alley under Tokyo Station."},
+ {id:"t-tower",n:"Tokyo Tower",c:"tokyo",a:"tokyost",k:["sight","kids"],d:"Classic red tower with a glass-floor deck."},
+ {id:"t-puroland",n:"Sanrio Puroland",c:"tokyo",a:"tama",k:["kids"],d:"Hello Kitty's indoor theme park, ~30 min from Shinjuku. Christmas event on. Allow 3–4 hours. Hours vary: check the calendar."},
+ {id:"t-kiddy",n:"Kiddy Land Harajuku",c:"tokyo",a:"shibuya",k:["kids"],d:"Multi-floor toy store with a big Sanrio and Hello Kitty floor."},
+ {id:"t-parco",n:"Shibuya Parco game stores",c:"tokyo",a:"shibuya",k:["otaku","kids"],d:"Nintendo Tokyo, Pokémon Center Shibuya and the Capcom Store in one building."},
+ {id:"t-scramble",n:"Shibuya Scramble",c:"tokyo",a:"shibuya",k:["sight"],d:"The famous crossing; watch from above at Shibuya Station."},
+ {id:"t-potato",n:"Super Potato",c:"tokyo",a:"akihabara",k:["otaku"],d:"Three floors of retro games and consoles, with a retro arcade on top."},
+ {id:"t-mandarake",n:"Mandarake Complex",c:"tokyo",a:"akihabara",k:["otaku"],d:"Eight floors of used manga, figures and games. Look for Berserk figures."},
+ {id:"t-gigo",n:"GiGO & Sega arcades",c:"tokyo",a:"akihabara",k:["otaku","kids"],d:"Claw machines, rhythm games and fighting games."},
+ {id:"t-ueno",n:"Ueno Zoo",c:"tokyo",a:"akihabara",k:["kids"],d:"Japan's oldest zoo, in a big park one stop from Akihabara.",closed:[1]},
+ {id:"t-sensoji",n:"Senso-ji",c:"tokyo",a:"asakusa",k:["sight","kids"],d:"Tokyo's oldest temple. Draw an omikuji fortune for 100 yen."},
+ {id:"t-skytree",n:"Skytree & Sumida Aquarium",c:"tokyo",a:"asakusa",k:["kids","sight"],d:"Penguins at the base, then the view from 350 m up."},
+ {id:"t-nakano",n:"Nakano Broadway",c:"tokyo",a:"nakano",k:["otaku"],d:"Collector mall: Mandarake HQ, Lashinbang and more. Your best bet for Berserk. Some shops close Wednesdays.",closed:[3],soft:true},
+ {id:"t-ghibli",n:"Ghibli Museum",c:"tokyo",a:"nakano",k:["kids"],d:"Tickets sell out fast; check for returns.",closed:[2]},
+ {id:"t-teamlab",n:"teamLab Planets",c:"tokyo",a:"odaiba",k:["kids","sight"],d:"Walk-in digital art rooms, one knee-deep in water. Book a time slot."},
+ {id:"t-gundam",n:"Life-size Gundam",c:"tokyo",a:"odaiba",k:["otaku","kids"],d:"A giant robot statue outside DiverCity. Free."},
+ {id:"t-joypolis",n:"Tokyo Joypolis",c:"tokyo",a:"odaiba",k:["otaku","kids"],d:"Sega's indoor arcade theme park."},
+ {id:"t-pcmega",n:"Pokémon Center Mega Tokyo",c:"tokyo",a:"ikebukuro",k:["kids","otaku"],d:"The biggest Pokémon store, in Sunshine City."},
+ {id:"t-animate",n:"Animate Ikebukuro",c:"tokyo",a:"ikebukuro",k:["otaku"],d:"The flagship anime store: manga, goods, new releases."},
+ {id:"t-sunaq",n:"Sunshine Aquarium",c:"tokyo",a:"ikebukuro",k:["kids"],d:"Rooftop aquarium with 'flying' penguins overhead."},
+ {id:"t-pokepark",n:"PokéPark Kanto",c:"tokyo",a:"yomiuri",k:["kids","otaku"],d:"Permanent outdoor Pokémon park, ~25 min from Shinjuku. Dated ticket needed."},
+ {id:"t-disney",n:"Tokyo Disneyland",c:"tokyo",a:"disney",k:["kids"],d:"Disney Christmas is on. Buy your dated ticket online; use the app for Premier Access."}
+];
+
+/* ---------- Locations (approximate lat, lng) ---------- */
+const COORDS = {
+ "k-inoda":[35.0076,135.7623],"k-daiichi":[34.9862,135.7614],"k-katsu":[35.0088,135.7672],"k-katsuporta":[34.9862,135.7590],
+ "k-menbaka":[35.0189,135.7447],"k-koji":[34.9855,135.7585],"k-omen":[35.0262,135.7942],"k-kuon":[35.0040,135.7610],
+ "k-nishikifood":[35.0050,135.7650],"k-inariudon":[34.9670,135.7720],"k-ekiben":[34.9858,135.7588],"k-manga":[35.0117,135.7590],
+ "k-nishiki":[35.0050,135.7655],"k-pokemon":[35.0033,135.7690],"k-inari":[34.9671,135.7727],"k-nijo":[35.0142,135.7481],
+ "k-kiyomizu":[34.9949,135.7850],"k-gion":[35.0037,135.7750],"k-arashiyama":[35.0170,135.6720],"k-railway":[34.9870,135.7425],
+ "k-nintendo":[34.9150,135.7790],"t-shinkansen":[34.9858,135.7588],"k-hotel":[35.0164,135.7553],"k-gosho":[35.0254,135.7621],
+ "t-hotel":[35.6553,139.7040],"t-santouka":[35.6566,139.7030],"t-ichishibuya":[35.6612,139.7010],
+ "t-tsukiji":[35.6655,139.7707],"t-bills":[35.6672,139.7080],"t-asasnack":[35.7118,139.7965],"t-ramenst":[35.6800,139.7680],
+ "t-otakohon":[35.6812,139.7745],"t-depachika":[35.6815,139.7683],"t-otako":[35.6935,139.7045],"t-udonshin":[35.6855,139.6985],
+ "t-fuunji":[35.6870,139.6960],"t-omoide":[35.6930,139.6995],"t-maisen":[35.6688,139.7110],"t-marugo":[35.6990,139.7720],
+ "t-otafuku":[35.7205,139.7915],"t-monja":[35.6630,139.7820],"t-aoba":[35.7075,139.6650],"t-mutekiya":[35.7290,139.7130],
+ "t-purofood":[35.6244,139.4285],"t-disfood":[35.6329,139.8804],"t-dbstore":[35.6812,139.7675],"t-charst":[35.6808,139.7680],
+ "t-tower":[35.6586,139.7454],"t-puroland":[35.6244,139.4285],"t-kiddy":[35.6680,139.7060],"t-parco":[35.6623,139.6985],
+ "t-scramble":[35.6595,139.7005],"t-potato":[35.6990,139.7710],"t-mandarake":[35.7000,139.7715],"t-gigo":[35.6985,139.7716],
+ "t-ueno":[35.7166,139.7713],"t-sensoji":[35.7148,139.7967],"t-skytree":[35.7101,139.8107],"t-nakano":[35.7090,139.6655],
+ "t-ghibli":[35.6962,139.5704],"t-teamlab":[35.6491,139.7898],"t-gundam":[35.6253,139.7756],"t-joypolis":[35.6286,139.7753],
+ "t-pcmega":[35.7290,139.7195],"t-animate":[35.7310,139.7150],"t-sunaq":[35.7290,139.7190],"t-pokepark":[35.6250,139.5180],
+ "t-disney":[35.6329,139.8804]
+};
+const HOTELS = {
+ kyoto:{n:"Kyoto stay",short:"your Kyoto stay",ll:[35.0164,135.7553],addr:"",near:"Marutamachi Station (Karasuma Line) is a 440 m walk"},
+ tokyo:{n:"Tokyo stay",short:"your Tokyo stay",ll:[35.6553,139.7040],addr:"",near:"JR Shibuya: a short walk from the Shin-minamiguchi (New South) exit, about 7 min from the East exit"}
+};
+const LANDMARKS = {
+ kyoto:[["Kyoto Sta.",34.9858,135.7588],["Kawaramachi",35.0037,135.7690],["Marutamachi",35.0170,135.7593],["Nijo Castle",35.0142,135.7481],["Gion",35.0037,135.7750],["Arashiyama",35.0094,135.6780],["Fushimi Inari",34.9671,135.7727]],
+ tokyo:[["Shibuya",35.6580,139.7016],["Shinjuku",35.6896,139.7006],["Tokyo Sta.",35.6812,139.7671],["Ikebukuro",35.7295,139.7109],["Ueno",35.7138,139.7773],["Shinagawa",35.6285,139.7387],["Akihabara",35.6984,139.7731],["Asakusa",35.7110,139.7964],["Odaiba",35.6267,139.7750]]
+};
+const hotelCity = d => d.cities[d.cities.length-1];
+function km(a,b){ const r=Math.PI/180, dl=(b[0]-a[0])*r, dg=(b[1]-a[1])*r; const s=Math.sin(dl/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dg/2)**2; return 12742*Math.asin(Math.sqrt(s)); }
+function hop(k){ return k<1.2 ? `${Math.max(2,Math.round(k*14))} min walk` : `~${Math.round(12+k*2)} min by train`; }
+function distFor(id, d){ const ll=COORDS[id], it=item(id); if(!ll || !it || it.c!==hotelCity(d)) return null; return km(HOTELS[hotelCity(d)].ll, ll); }
+function dirLink(id, d){ const a=HOTELS[hotelCity(d)].ll, b=COORDS[id]; return `https://www.google.com/maps/dir/?api=1&origin=${a[0]},${a[1]}&destination=${b[0]},${b[1]}&travelmode=transit`; }
+
+/* ---------- Starting plan ---------- */
+const START = [
+ {date:"2026-11-10",cities:["kyoto"],title:"Manga and markets",acts:["k-manga","k-nishiki","k-pokemon"],b:null,l:"k-nishikifood",d:"k-katsu"},
+ {date:"2026-11-11",cities:["kyoto"],title:"Gates and fire ramen",acts:["k-inari","k-nijo","k-gion"],b:"k-inoda",l:"k-menbaka",d:"k-koji"},
+ {date:"2026-11-12",cities:["kyoto","tokyo"],title:"Kyoto to Tokyo",travel:true,locked:"Travel day",acts:["t-shinkansen","t-dbstore","t-charst"],b:"k-daiichi",l:"k-ekiben",d:"t-ramenst"},
+ {date:"2026-11-13",cities:["tokyo"],title:"Hello Kitty day",acts:["t-puroland"],b:"t-komeda",l:"t-purofood",d:"t-otako"},
+ {date:"2026-11-14",cities:["tokyo"],title:"Akihabara and Ueno",acts:["t-potato","t-mandarake","t-gigo","t-ueno"],b:"x-gyudon",l:"t-marugo",d:"x-kura"},
+ {date:"2026-11-15",cities:["tokyo"],title:"Asakusa",acts:["t-sensoji","t-skytree"],b:"x-konbini",l:"t-asasnack",d:"t-otafuku"},
+ {date:"2026-11-16",cities:["tokyo"],title:"Nakano and Shibuya",acts:["t-nakano","t-parco","t-kiddy","t-scramble"],b:"t-hotel",l:"t-aoba",d:"t-maisen"},
+ {date:"2026-11-17",cities:["tokyo"],title:"Toyosu and Odaiba",acts:["t-teamlab","t-gundam","t-joypolis"],b:"t-tsukiji",l:"x-ichiran",d:"t-monja"},
+ {date:"2026-11-18",cities:["tokyo"],title:"Ikebukuro, easy day",acts:["t-pcmega","t-animate","t-sunaq"],b:"x-konbini",l:"t-mutekiya",d:"t-depachika"},
+ {date:"2026-11-19",cities:["tokyo"],title:"Tokyo Disneyland",locked:"Dated ticket",acts:["t-disney"],b:"t-hotel",l:"t-disfood",d:"t-disfood"},
+ {date:"2026-11-20",cities:["tokyo"],title:"Last bites, fly home",locked:"Departure day",acts:[],b:"t-tsukiji",l:"t-depachika",d:null}
+];
+const BOOKINGS = [
+ {id:"disney",n:"Tokyo Disneyland ticket, Nov 19",p:"Online only, dated. Add it to the Tokyo Disney Resort app.",u:"https://www.tokyodisneyresort.jp/en/tdr/calendar/202611/"},
+ {id:"puro",n:"Sanrio Puroland ticket",p:"Check the park calendar first; it closes some weekdays.",u:"https://en.puroland.jp/"},
+ {id:"shink",n:"Shinkansen seats, Nov 12",p:"Kyoto to Tokyo. Book seat E, the Mt Fuji side. Bags over 160 cm (L+W+H) need an oversized-baggage seat.",u:"https://smart-ex.jp/en/"},
+ {id:"teamlab",n:"teamLab Planets time slot",p:"Sells by time slot; weekends fill first.",u:"https://www.teamlab.art/e/planets/"},
+ {id:"otafuku",n:"Otafuku oden table",p:"Small restaurant in Asakusa; closed Mondays.",u:"https://www.otafuku.ne.jp/"},
+ {id:"poke",n:"PokéPark Kanto (optional)",p:"Dated tickets for any free Tokyo day.",u:"https://www.pokepark-kanto.co.jp/"},
+ {id:"ghibli",n:"Ghibli Museum (optional)",p:"Usually sold out; check for returns.",u:"https://www.ghibli-museum.jp/en/"},
+ {id:"nintendo",n:"Nintendo Museum (long shot)",p:"Advance lottery only, no walk-ups.",u:"https://museum.nintendo.com/en/"}
+];
+
+/* ---------- State ---------- */
+const KEY = "kyoto-tokyo-trip-v2";
+let state, ui = {tab:"plan", day:0, ecity:"all", ecat:"all", edish:"all", near:false, sel:null};
+function fresh(){ return {days: JSON.parse(JSON.stringify(START)), custom:[], booked:{}}; }
+function load(){
+  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.days && s.days.length===START.length) return s; }catch(e){}
+  return fresh();
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+state = load();
+// open on today's day if inside the trip
+(function(){ const t = new Date(); const iso = t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");
+  const i = state.days.findIndex(d=>d.date===iso); if(i>=0) ui.day=i; })();
+
+const item = id => LIB.find(x=>x.id===id) || state.custom.find(x=>x.id===id);
+const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dow = d => new Date(d.date+"T00:00:00").getDay();
+const dnum = d => Number(d.date.slice(8));
+const label = d => DOW[dow(d)]+" "+dnum(d);
+const MEALS = {b:"Breakfast", l:"Lunch", d:"Dinner"};
+const planned = d => [...d.acts, d.b, d.l, d.d].filter(Boolean);
+function whereIs(id){ const out=[]; state.days.forEach((d,i)=>{ if(planned(d).includes(id)) out.push(i); }); return out; }
+function dayAreas(d){ const s=new Set(); planned(d).forEach(id=>{ const it=item(id); if(it && it.a!=="any") s.add(it.a); }); return s; }
+function cityOk(it, d){ return it.c==="any" || d.cities.includes(it.c); }
+function conflicts(d){
+  const w = dow(d), out=[];
+  planned(d).forEach(id=>{ const it=item(id); if(it && it.closed && it.closed.includes(w)) out.push(it); });
+  return out;
+}
+function closedTag(it){ if(!it.closed) return ""; return (it.soft?"Some shops closed ":"Closed ")+it.closed.map(x=>DOWL[x]).join(" & "); }
+
+/* ---------- Render ---------- */
+const $ = id => document.getElementById(id);
+function render(){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("on", b.dataset.tab===ui.tab));
+  renderStrip();
+  if(ui.tab!=="plan" && lmap){ lmap.remove(); lmap=null; }
+  if(ui.tab==="plan") renderDay(); else if(ui.tab==="explore") renderExplore(); else renderBook();
+  fillPhotos();
+}
+function renderStrip(){
+  const s = $("strip");
+  s.style.display = ui.tab==="plan" ? "flex" : "none";
+  s.innerHTML = state.days.map((d,i)=>{
+    const cls = d.travel ? "travel" : d.cities[0];
+    return `<button class="chip-day ${cls} ${i===ui.day?"on":""} ${conflicts(d).length?"flag":""}" role="tab" aria-selected="${i===ui.day}" data-act="day" data-i="${i}"><small>${DOW[dow(d)]}</small><b>${dnum(d)}</b><i></i></button>`;
+  }).join("");
+  const on = s.querySelector(".on"); if(on) on.scrollIntoView({block:"nearest", inline:"center"});
+}
+const DISH = {Ramen:"ramen", Oden:"oden", Udon:"udon", Tonkatsu:"tonkatsu"};
+function whoOf(it){ if(it.k.includes("food") || it.k.includes("travel")) return []; const w=[]; if(it.k.includes("kids")) w.push("Kids"); if(it.k.includes("otaku")) w.push("Dad"); if(!w.length || it.k.includes("sight")) w.unshift("Everyone"); return w; }
+function cityWord(it, d){ return it.c==="kyoto" ? "Kyoto" : it.c==="tokyo" ? "Tokyo" : (d ? (hotelCity(d)==="kyoto"?"Kyoto":"Shibuya Tokyo") : "Tokyo"); }
+function links(it, d){
+  const q = encodeURIComponent(it.n.replace(/\(.*?\)/g,"")+" "+cityWord(it,d));
+  const map = COORDS[it.id] ? `https://www.google.com/maps/search/?api=1&query=${COORDS[it.id][0]},${COORDS[it.id][1]}` : `https://www.google.com/maps/search/?api=1&query=${q}`;
+  return `<a class="lnk" href="https://www.google.com/search?tbm=isch&q=${q}" target="_blank" rel="noopener">Photos</a><a class="lnk" href="${map}" target="_blank" rel="noopener">Map</a>`;
+}
+function tagsFor(it, d, showWhere){
+  let t = "";
+  whoOf(it).forEach(w=>{ t += `<span class="tag who-${w.toLowerCase()}">${w==="Everyone"?"Everyone":w==="Kids"?"For the kids":"For Dad"}</span>`; });
+  if(it.tag) t += `<span class="tag dish ${DISH[it.tag]?"d-"+DISH[it.tag]:"d-other"}">${esc(it.tag)}</span>`;
+  if(it.a && it.a!=="any") t += `<span class="tag where ${it.c==="kyoto"?"kyoto":""}">${esc(AREAS[it.a])}</span>`;
+  if(it.closed){ const hit = d && it.closed.includes(dow(d)); t += `<span class="tag ${hit?"closed":""}">${esc(closedTag(it))}</span>`; }
+  if(d){ const k = distFor(it.id, d); if(k!==null) t += `<span class="tag dist">${k<0.15?"At the hotel":k.toFixed(1)+" km · "+hop(k)}</span>`; }
+  if(showWhere){ const w = whereIs(it.id); if(w.length) t += `<span class="tag">Planned ${w.map(i=>label(state.days[i])).join(", ")}</span>`; }
+  return t ? `<div class="tags">${t}</div>` : "";
+}
+function renderDay(){
+  const i = ui.day, d = state.days[i];
+  const city = d.travel ? "Kyoto → Tokyo" : (d.cities[0]==="kyoto"?"Kyoto":"Tokyo");
+  const cf = conflicts(d);
+  let h = `<div class="dayhead"><div class="datebox ${d.cities[0]==="kyoto"?"kyoto":""}"><b>${dnum(d)}</b><small>${DOW[dow(d)]} · Nov</small></div>
+    <div><div class="citytag">${city}</div><h2>${esc(d.title)}</h2></div></div>`;
+  h += `<div class="row">`;
+  if(d.locked) h += `<span class="lockline"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>${esc(d.locked)}: stays on this date</span>`;
+  else h += `<button class="btn" data-act="swap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>Swap with another day</button>`;
+  h += `<button class="btn ghost" data-act="rename">Rename</button></div>`;
+  if(cf.length) h += `<div class="warn" role="alert">${cf.map(it=>`<div><b>${esc(it.n)}</b>: ${esc(closedTag(it))}. ${it.soft?"Expect fewer shops open.":"Move it to another day."}</div>`).join("")}</div>`;
+  if(d.travel) h += trainCard();
+  h += mapCard(d);
+
+  h += `<div class="sec"><h3>Meals</h3>` + ["b","l","d"].map(m=>{
+    const it = d[m] && item(d[m]);
+    return `<button class="meal" data-act="meal" data-m="${m}"><span class="slot">${MEALS[m]}</span>
+      <span class="what">${it?`<strong>${esc(it.n)}</strong><span>${esc([it.tag, it.a&&it.a!=="any"?AREAS[it.a]:"Anywhere"].filter(Boolean).join(" · "))}${it.closed&&it.closed.includes(dow(d))?" · closed today":""}</span>`:`<span class="empty">Pick a place</span>`}</span>
+      ${it?`<span class="ph" data-ph="${it.id}"></span>`:"<span></span>"}<span class="chev">${it?"":"Choose "}›</span></button>`;
+  }).join("") + `</div>`;
+
+  h += `<div class="sec"><h3>Plan <span>${d.acts.length} stop${d.acts.length===1?"":"s"}</span></h3>`;
+  if(!d.acts.length) h += `<div class="emptynote">Nothing planned yet. Add a stop below.</div>`;
+  h += d.acts.map((id,k)=>{ const it=item(id); if(!it) return "";
+    return `<div class="card act"><div class="act-top"><span class="num">${k+1}</span><div class="act-body"><strong>${esc(it.n)}</strong>${it.d?`<p>${esc(it.d)}</p>`:""}${tagsFor(it,d)}</div><div class="ph" data-ph="${it.id}"></div></div>
+      <div class="act-tools"><span class="lnks">${links(it,d)}</span>
+        <button class="icon" aria-label="Move up" data-act="up" data-k="${k}" ${k===0?"disabled":""}>↑</button>
+        <button class="icon" aria-label="Move down" data-act="down" data-k="${k}" ${k===d.acts.length-1?"disabled":""}>↓</button>
+        <button class="icon txt" data-act="moveto" data-k="${k}" aria-label="Move to another day">Move</button>
+        <button class="icon" aria-label="Remove" data-act="rm" data-k="${k}">✕</button>
+      </div></div>`; }).join("");
+  h += `<button class="btn primary" data-act="addact" style="align-self:flex-start">+ Add a stop</button></div>`;
+
+  const sug = suggestions(d, 4);
+  if(sug.length){
+    h += `<div class="sec"><h3>Suggested near today's plan</h3>` + sug.map(it=>`<div class="card sug"><div class="ph" data-ph="${it.id}"></div><div class="act-body"><strong>${esc(it.n)}</strong><p>${esc(it.d||"")}</p>${tagsFor(it,d)}<div class="lnks">${links(it,d)}</div></div>
+      <button class="add" aria-label="Add ${esc(it.n)}" data-act="quickadd" data-id="${it.id}">+</button></div>`).join("") + `</div>`;
+  }
+  const nh = nearHotel(d, 4);
+  if(nh.length){
+    h += `<div class="sec"><h3>Close to your hotel</h3>` + nh.map(it=>`<div class="card sug"><div class="ph" data-ph="${it.id}"></div><div class="act-body"><strong>${esc(it.n)}</strong><p>${esc(it.d||"")}</p>${tagsFor(it,d)}<div class="lnks">${links(it,d)}</div></div>
+      <button class="add" aria-label="Add ${esc(it.n)}" data-act="${it.m?"addto":"quickadd"}" data-id="${it.id}">+</button></div>`).join("") + `</div>`;
+  }
+  h += `<div class="pager"><button class="btn" data-act="prev" ${i===0?"disabled":""}>‹ ${i>0?label(state.days[i-1]):""}</button><button class="btn" data-act="next" ${i===state.days.length-1?"disabled":""}>${i<state.days.length-1?label(state.days[i+1]):""} ›</button></div>`;
+  $("main").innerHTML = h;
+  initLeaflet(d);
+}
+function mapPoints(d){
+  const hc = hotelCity(d), pts = [];
+  d.acts.forEach((id,k)=>{ const it=item(id), ll=COORDS[id]; if(it && ll && it.c===hc) pts.push({id, ll, lab:String(k+1), kind:"act", it}); });
+  ["b","l","d"].forEach(m=>{ const id=d[m], it=id&&item(id), ll=id&&COORDS[id]; if(it && ll && it.c===hc) pts.push({id, ll, lab:m.toUpperCase(), kind:"meal", it}); });
+  return pts;
+}
+function mapCard(d){
+  const hc = hotelCity(d), H = HOTELS[hc], pts = mapPoints(d);
+  const near = ui.near ? LIB.filter(it=>COORDS[it.id] && it.c===hc && !planned(d).includes(it.id) && !it.k.includes("travel") && km(H.ll, COORDS[it.id])<2.5) : [];
+  const W=340, Ht=260, pad=38, c=Math.cos(H.ll[0]*Math.PI/180);
+  const P = ll => [(ll[1]-H.ll[1])*111.32*c, -(ll[0]-H.ll[0])*110.57];
+  const all = [[0,0]].concat(pts.map(p=>P(p.ll)), near.map(it=>P(COORDS[it.id])));
+  let x0=Math.min(...all.map(a=>a[0])), x1=Math.max(...all.map(a=>a[0])), y0=Math.min(...all.map(a=>a[1])), y1=Math.max(...all.map(a=>a[1]));
+  const minS=1.6;
+  if(x1-x0<minS){ const m=(x0+x1)/2; x0=m-minS/2; x1=m+minS/2; }
+  if(y1-y0<minS){ const m=(y0+y1)/2; y0=m-minS/2; y1=m+minS/2; }
+  const s = Math.min((W-2*pad)/(x1-x0), (Ht-2*pad)/(y1-y0));
+  const ox = W/2 - s*(x0+x1)/2, oy = Ht/2 - s*(y0+y1)/2;
+  const X = p => ox + s*p[0], Y = p => oy + s*p[1];
+  const nice = [0.25,0.5,1,2,5,10,20,50].find(v=>v >= (W/5)/s) || 50;
+  const hx = X([0,0]), hy = Y([0,0]);
+  let g = `<rect class="m-bg" x="0" y="0" width="${W}" height="${Ht}" rx="14"/>`;
+  g += `<circle class="m-ring" cx="${hx}" cy="${hy}" r="${nice*s}"/><circle class="m-ring" cx="${hx}" cy="${hy}" r="${nice*2*s}"/>`;
+  g += `<text class="m-ringt" x="${hx+nice*s*0.707+3}" y="${hy-nice*s*0.707-3}">${nice} km</text>`;
+  LANDMARKS[hc].forEach(([n,la,lo])=>{ const p=P([la,lo]), x=X(p), y=Y(p); if(x>8 && x<W-8 && y>12 && y<Ht-8){ const r = x>W-80; g += `<rect class="m-lmdot" x="${x-3}" y="${y-3}" width="6" height="6" rx="1"/><text class="m-lm" x="${r?x-6:x+6}" y="${y+3}" text-anchor="${r?"end":"start"}">${esc(n)}</text>`; } });
+  near.forEach(it=>{ const p=P(COORDS[it.id]); g += `<g class="m-near" data-act="mark" data-id="${it.id}"><circle cx="${X(p)}" cy="${Y(p)}" r="9" class="hit"/><circle cx="${X(p)}" cy="${Y(p)}" r="5"/></g>`; });
+  const placed = [];
+  pts.forEach(pt=>{
+    const p=P(pt.ll); let x=X(p), y=Y(p), n=0;
+    const bx=x, by=y; while(placed.some(q=>Math.hypot(q[0]-x,q[1]-y)<24) && n<12){ n++; x = bx+24*Math.cos(n*2.1)*(1+Math.floor((n-1)/3)*0.6); y = by+24*Math.sin(n*2.1)*(1+Math.floor((n-1)/3)*0.6); }
+    placed.push([x,y]);
+    const sel = ui.sel===pt.id ? `<circle class="m-sel" cx="${x}" cy="${y}" r="16"/>` : "";
+    g += `<g class="m-${pt.kind}" data-act="mark" data-id="${pt.id}" role="button" aria-label="${esc(pt.lab+": "+pt.it.n)}">${sel}<circle cx="${x}" cy="${y}" r="12"/><text x="${x}" y="${y+0.5}">${pt.lab}</text></g>`;
+  });
+  g += `<g class="m-hotel"><rect x="${hx-13}" y="${hy-13}" width="26" height="26" rx="7"/><path d="M${hx-6} ${hy+6}v-6l6-5 6 5v6z" class="m-house"/></g>`;
+  // scale bar
+  g += `<line class="m-scale" x1="${W-14-nice*s}" y1="${Ht-14}" x2="${W-14}" y2="${Ht-14}"/><text class="m-scalet" x="${W-14-nice*s/2}" y="${Ht-20}">${nice} km</text>`;
+  let cap;
+  const selIt = ui.sel && item(ui.sel);
+  if(selIt && COORDS[selIt.id]){
+    const k = km(H.ll, COORDS[selIt.id]);
+    const inPlan = planned(d).includes(selIt.id);
+    cap = `<div class="act-body"><strong>${esc(selIt.n)}</strong><p>${k.toFixed(1)} km from ${esc(H.short)} · ${hop(k)}</p></div>
+      <div class="row"><a class="btn" href="${dirLink(selIt.id,d)}" target="_blank" rel="noopener">Directions</a><a class="btn" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(selIt.n+" "+cityWord(selIt,d))}" target="_blank" rel="noopener">Photos</a>${inPlan?"":`<button class="btn primary" data-act="${selIt.m?"addto":"quickadd"}" data-id="${selIt.id}">Add</button>`}</div>`;
+  } else {
+    cap = `<div class="act-body"><strong>${esc(H.n)}</strong><p>${esc(H.near)}. Tap a pin for distance and directions.</p></div>`;
+  }
+  const route = [H.ll].concat(d.acts.map(id=>COORDS[id]&&item(id)&&item(id).c===hc?COORDS[id]:null).filter(Boolean), [H.ll]).map(p=>p[0]+","+p[1]).join("/");
+  const gm = `https://www.google.com/maps/dir/${route}`;
+  return `<a class="btn primary gmap" href="${gm}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Open today's route in Google Maps</a>
+  <div class="sec"><h3>Map <button class="linkbtn" data-act="near" aria-pressed="${ui.near}">${ui.near?"Hide":"Show"} places nearby</button></h3>
+    <div class="card mapcard ${hc}">${window.L?`<div id="lmap" class="lmap" role="region" aria-label="Street map of today's stops"></div>`:`<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Map of today's stops around ${esc(H.n)}">${g}</svg>
+    <div class="mapcap">${cap}</div>`}
+    <div class="legend"><span><i class="lg-h"></i>Hotel</span><span><i class="lg-a"></i>Stops</span><span><i class="lg-m"></i>Meals</span>${ui.near?`<span><i class="lg-n"></i>Nearby, not planned</span>`:""}${d.travel?`<span>Tokyo end of the day</span>`:""}${window.L?"<span>Tap a pin for a photo, distance and directions</span>":""}</div></div></div>`;
+}
+function trainCard(){
+  return `<div class="card train"><h3 class="th">Kyoto to Tokyo by train</h3>
+  <ol class="steps">
+    <li><b>Hotel to Kyoto Station.</b> Walk 440 m to Marutamachi, then 4 stops south on the Karasuma Line (about 6 min, ¥220). A taxi takes about 15 min.</li>
+    <li><b>Shinkansen.</b> Pick a train below. Check-out is 11:00, so a Nozomi around 10:30–11:30 reaches Tokyo around 12:45–13:45.</li>
+    <li><b>Tokyo Station.</b> The Dragon Ball Store and Character Street are inside the station. Use coin lockers for bags.</li>
+    <li><b>Tokyo Station to the hotel.</b> JR Yamanote Line to Shibuya, about 25 min, then a short walk. A taxi takes about 30 min.</li>
+  </ol>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Train</th><th>Time</th><th>How often</th><th>Reserved seat</th></tr></thead>
+    <tbody>
+      <tr><td><b>Nozomi</b></td><td>~2h15m</td><td>Several an hour</td><td>¥14,170<br><small>¥13,970 on SmartEX</small></td></tr>
+      <tr><td><b>Hikari</b></td><td>~2h40m</td><td>About 2 an hour</td><td>¥13,850</td></tr>
+      <tr><td><b>Kodama</b></td><td>~3h40m</td><td>About 2 an hour</td><td>Stops everywhere</td></tr>
+    </tbody></table></div>
+  <ul class="tips">
+    <li>Adult fares, one way. Children 6–11 pay about half. A non-reserved Nozomi seat is ¥13,320.</li>
+    <li>Book seat E: it's on the Mt Fuji side going to Tokyo too.</li>
+    <li>Bags over 160 cm (length + width + height) need a seat with an oversized-baggage area.</li>
+    <li>Skipping Tokyo Station? Get off at Shinagawa, one stop earlier, and take the Yamanote Line about 12 min to Shibuya.</li>
+  </ul>
+  <a class="btn primary" href="https://smart-ex.jp/en/" target="_blank" rel="noopener">Book on SmartEX</a></div>`;
+}
+function nearHotel(d, n){
+  const hc = hotelCity(d), H = HOTELS[hc], w = dow(d), skip = new Set(suggestions(d,4).map(x=>x.id));
+  return LIB.filter(it=>COORDS[it.id] && it.c===hc && !it.k.includes("travel") && !planned(d).includes(it.id) && !skip.has(it.id) && !(it.closed && it.closed.includes(w) && !it.soft) && km(H.ll, COORDS[it.id])<1.6 && it.id!=="k-hotel" && it.id!=="t-hotel")
+    .sort((a,b)=>km(H.ll,COORDS[a.id])-km(H.ll,COORDS[b.id])).slice(0,n);
+}
+/* ---------- Photos (Wikipedia lead images) ---------- */
+const WIKI = {"k-manga":"Kyoto International Manga Museum","k-nishiki":"Nishiki Market","k-nishikifood":"Nishiki Market","k-inari":"Fushimi Inari-taisha","k-inariudon":"Kitsune udon",
+ "k-nijo":"Nijō Castle","k-kiyomizu":"Kiyomizu-dera","k-gion":"Gion","k-arashiyama":"Arashiyama","k-railway":"Kyoto Railway Museum","k-nintendo":"Nintendo Museum",
+ "k-gosho":"Kyoto Imperial Palace","k-ekiben":"Ekiben","t-shinkansen":"Tōkaidō Shinkansen","t-charst":"Tokyo Station","t-dbstore":"Tokyo Station","t-ramenst":"Tokyo Station",
+ "t-tower":"Tokyo Tower","t-puroland":"Sanrio Puroland","t-purofood":"Sanrio Puroland","t-kiddy":"Kiddy Land","t-parco":"Shibuya","t-scramble":"Shibuya Crossing","t-potato":"Akihabara",
+ "t-mandarake":"Mandarake","t-gigo":"Akihabara","t-ueno":"Ueno Zoo","t-sensoji":"Sensō-ji","t-asasnack":"Nakamise-dōri","t-skytree":"Tokyo Skytree","t-nakano":"Nakano Broadway",
+ "t-ghibli":"Ghibli Museum","t-teamlab":"TeamLab Planets","t-gundam":"DiverCity Tokyo Plaza","t-joypolis":"Joypolis","t-pcmega":"Sunshine City","t-animate":"Animate","t-sunaq":"Sunshine City",
+ "t-pokepark":"Yomiuriland","t-disney":"Tokyo Disneyland","t-disfood":"Tokyo Disneyland","t-tsukiji":"Tsukiji Outer Market","t-omoide":"Omoide Yokochō","t-depachika":"Depachika",
+ "t-monja":"Monjayaki","x-kura":"Conveyor belt sushi","x-konbini":"Convenience stores in Japan","t-komeda":"Komeda","t-inoda":"Kissaten","k-inoda":"Kissaten"};
+const DISHWIKI = {Ramen:"Ramen",Oden:"Oden",Udon:"Udon",Tonkatsu:"Tonkatsu",Sushi:"Sushi",Monjayaki:"Monjayaki",Yakitori:"Yakitori",Gyudon:"Gyūdon",Bento:"Bento",Pancakes:"Pancake",Breakfast:"Japanese breakfast","Coffee & breakfast":"Kissaten"};
+function wikiTitle(it){ return WIKI[it.id] || DISHWIKI[it.tag] || null; }
+let PH = {}; try{ PH = JSON.parse(localStorage.getItem("trip-photos")||"{}"); }catch(e){}
+const phPending = {};
+function photoFor(title){
+  if(Object.prototype.hasOwnProperty.call(PH,title)) return Promise.resolve(PH[title]);
+  if(phPending[title]) return phPending[title];
+  return phPending[title] = fetch("https://en.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title.replace(/ /g,"_")))
+    .then(r=>r.ok ? r.json() : (r.status===404 ? {} : null))
+    .then(j=>{ if(j===null) return null; const u = (j.thumbnail && j.thumbnail.source) || ""; PH[title]=u; try{ localStorage.setItem("trip-photos", JSON.stringify(PH)); }catch(e){} return u; })
+    .catch(()=>null);
+}
+function fillPhotos(){
+  document.querySelectorAll(".ph[data-ph]:not([data-done])").forEach(el=>{
+    el.dataset.done="1";
+    const it = item(el.dataset.ph), t = it && wikiTitle(it);
+    if(!t) return;
+    photoFor(t).then(u=>{ if(u){ el.style.backgroundImage = `url("${u}")`; el.classList.add("on"); el.setAttribute("role","img"); el.setAttribute("aria-label", WIKI[it.id] ? "Photo of "+it.n : "Photo of "+it.tag); } });
+  });
+}
+
+/* ---------- Street map (Leaflet + OpenStreetMap) ---------- */
+let lmap = null;
+function popupHtml(it, d){
+  const ll = COORDS[it.id]; const k = km(HOTELS[hotelCity(d)].ll, ll); const inPlan = planned(d).includes(it.id);
+  return `<div class="pop"><div class="ph pop-ph" data-ph="${it.id}"></div><strong>${esc(it.n)}</strong>${it.tag?`<div class="pop-d">${esc(it.tag)}</div>`:""}<div class="pop-d">${k<0.15?"At your hotel":k.toFixed(1)+" km from your hotel · "+hop(k)}</div>
+    <div class="pop-b"><a href="${dirLink(it.id,d)}" target="_blank" rel="noopener">Directions</a>${inPlan?"":`<button data-act="${it.m?"addto":"quickadd"}" data-id="${it.id}">Add</button>`}</div></div>`;
+}
+function initLeaflet(d){
+  if(lmap){ lmap.remove(); lmap = null; }
+  const el = document.getElementById("lmap"); if(!el || !window.L) return;
+  const hc = hotelCity(d), H = HOTELS[hc];
+  lmap = L.map(el, {scrollWheelZoom:false, zoomControl:true});
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {maxZoom:19, subdomains:"abcd",
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(lmap);
+  const pin = (cls, html) => L.divIcon({className:"", html:`<div class="pin ${cls}">${html}</div>`, iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16]});
+  const house = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>';
+  L.marker(H.ll, {icon:pin("pin-h "+hc, house), zIndexOffset:1000, title:"Your hotel"}).addTo(lmap).bindPopup(`<div class="pop"><strong>${esc(H.n)}</strong><div class="pop-d">${esc(H.near)}</div></div>`);
+  if(ui.near){
+    LIB.filter(it=>COORDS[it.id] && it.c===hc && !planned(d).includes(it.id) && !it.k.includes("travel") && km(H.ll, COORDS[it.id])<2.5)
+      .forEach(it=>L.circleMarker(COORDS[it.id], {radius:7, color:"#fff", weight:2, fillColor:"#7b879b", fillOpacity:.95}).addTo(lmap).bindPopup(popupHtml(it,d)));
+  }
+  const bounds = [H.ll];
+  mapPoints(d).forEach(pt=>{ bounds.push(pt.ll); L.marker(pt.ll, {icon:pin(pt.kind==="meal"?"pin-m":"pin-a", pt.lab), title:pt.it.n}).addTo(lmap).bindPopup(popupHtml(pt.it,d)); });
+  if(bounds.length===1) lmap.setView(H.ll, 15); else lmap.fitBounds(bounds, {padding:[34,34], maxZoom:16});
+  lmap.on("popupopen", ()=>fillPhotos());
+}
+
+function suggestions(d, n){
+  const areas = dayAreas(d), w = dow(d);
+  return LIB.filter(it=>!it.m && !it.k.includes("travel") && cityOk(it,d) && !planned(d).includes(it.id) && !(it.closed && it.closed.includes(w) && !it.soft))
+    .map(it=>({it, s:(areas.has(it.a)?3:0) + (whereIs(it.id).length?0:1)}))
+    .filter(x=>x.s>=3).sort((a,b)=>b.s-a.s).slice(0,n).map(x=>x.it);
+}
+function renderExplore(){
+  const fc = (k,v,t,cur)=>`<button class="fchip ${cur===v?"on":""}" data-act="${k}" data-v="${v}">${t}</button>`;
+  let list = LIB.concat(state.custom).filter(it=>!it.k.includes("travel"));
+  if(ui.ecity!=="all") list = list.filter(it=>it.c===ui.ecity || it.c==="any");
+  if(ui.ecat==="kids") list = list.filter(it=>whoOf(it).includes("Kids"));
+  else if(ui.ecat==="dad") list = list.filter(it=>whoOf(it).includes("Dad"));
+  else if(ui.ecat!=="all") list = list.filter(it=>it.k.includes(ui.ecat));
+  if(ui.ecat==="food" && ui.edish!=="all") list = list.filter(it=>ui.edish==="other" ? !DISH[it.tag] : it.tag===ui.edish);
+  let h = `<p class="lead">Everything from your list. Tap + to add a place to a day.</p>
+    <div class="filters">${fc("ecity","all","Both cities",ui.ecity)}${fc("ecity","kyoto","Kyoto",ui.ecity)}${fc("ecity","tokyo","Tokyo",ui.ecity)}</div>
+    <div class="filters">${fc("ecat","all","All",ui.ecat)}${fc("ecat","kids","For the kids",ui.ecat)}${fc("ecat","dad","For Dad",ui.ecat)}${fc("ecat","food","Food",ui.ecat)}${fc("ecat","sight","Sights",ui.ecat)}</div>
+    ${ui.ecat==="food"?`<div class="filters">${fc("edish","all","All food",ui.edish)}${fc("edish","Ramen","Ramen",ui.edish)}${fc("edish","Oden","Oden",ui.edish)}${fc("edish","Udon","Udon",ui.edish)}${fc("edish","Tonkatsu","Tonkatsu",ui.edish)}${fc("edish","other","Other",ui.edish)}</div>`:""}
+    <div class="sec">`;
+  h += list.map(it=>`<div class="card sug"><div class="ph" data-ph="${it.id}"></div><div class="act-body"><strong>${esc(it.n)}</strong>${it.d?`<p>${esc(it.d)}</p>`:""}${tagsFor(it,null,true)}<div class="lnks">${links(it,null)}</div></div><button class="add" aria-label="Add ${esc(it.n)} to a day" data-act="addto" data-id="${it.id}">+</button></div>`).join("") || `<div class="emptynote">No places match these filters.</div>`;
+  h += `</div>`;
+  $("main").innerHTML = h;
+}
+function renderBook(){
+  const done = BOOKINGS.filter(b=>state.booked[b.id]).length;
+  let h = `<p class="lead">${done} of ${BOOKINGS.length} done. Disney and Puroland first: both sell dated tickets online.</p><div class="sec">`;
+  h += BOOKINGS.map(b=>`<div class="card book ${state.booked[b.id]?"done":""}"><input type="checkbox" id="bk-${b.id}" data-act="book" data-id="${b.id}" ${state.booked[b.id]?"checked":""}><label for="bk-${b.id}"><strong>${esc(b.n)}</strong><p>${esc(b.p)} <a href="${b.u}" target="_blank" rel="noopener">Open site</a></p></label></div>`).join("");
+  h += `</div><div class="sec"><h3>Your plan</h3><p class="lead">Changes save on this phone only.</p><button class="btn" data-act="reset" style="align-self:flex-start">Reset to the original plan</button></div>
+  <p class="foot">Hours and closing days are a guide; check before you go.<br>Photos come from Wikipedia and Wikimedia Commons. Restaurant photos show the dish, not that exact shop. Map &copy; OpenStreetMap contributors, &copy; CARTO.</p>`;
+  $("main").innerHTML = h;
+}
+
+/* ---------- Sheets ---------- */
+function openSheet(title, body){
+  $("sheet").innerHTML = `<div class="sheet-head"><div class="grab"></div><div class="t"><h4>${title}</h4><button class="btn ghost" data-act="close">Done</button></div></div><div class="sheet-body">${body}</div>`;
+  $("sheetwrap").classList.add("open"); document.body.style.overflow="hidden"; fillPhotos();
+}
+function closeSheet(){ $("sheetwrap").classList.remove("open"); document.body.style.overflow=""; ui.sheet=null; }
+function pickRow(it, d, act, extra, on){
+  return `<button class="pick ${on?"on":""}" data-act="${act}" data-id="${it.id}" ${extra||""}><div class="ph" data-ph="${it.id}"></div><div class="act-body"><strong>${esc(it.n)}</strong>${it.d?`<p>${esc(it.d)}</p>`:""}${tagsFor(it,d,true)}</div></button>`;
+}
+function grouped(list, d, act, extra, cur){
+  const areas = dayAreas(d);
+  const near = list.filter(it=>areas.has(it.a)), any = list.filter(it=>it.a==="any"), rest = list.filter(it=>!areas.has(it.a) && it.a!=="any");
+  let h = "";
+  if(near.length) h += `<h5>Near today's plan</h5>` + near.map(it=>pickRow(it,d,act,extra,it.id===cur)).join("");
+  if(any.length) h += `<h5>Anywhere</h5>` + any.map(it=>pickRow(it,d,act,extra,it.id===cur)).join("");
+  if(rest.length) h += `<h5>Elsewhere in ${d.travel?"Kyoto & Tokyo":(d.cities[0]==="kyoto"?"Kyoto":"Tokyo")}</h5>` + rest.map(it=>pickRow(it,d,act,extra,it.id===cur)).join("");
+  return h;
+}
+function sheetMeal(m){
+  const d = state.days[ui.day];
+  const list = LIB.concat(state.custom).filter(it=>it.m && it.m.includes(m) && cityOk(it,d));
+  let body = grouped(list, d, "setmeal", `data-m="${m}"`, d[m]);
+  body += ownBox("meal", m) + (d[m]?`<button class="btn" data-act="clearmeal" data-m="${m}">Clear ${MEALS[m].toLowerCase()}</button>`:"");
+  openSheet(`${MEALS[m]} · ${label(d)}`, body);
+}
+function sheetAdd(){
+  const d = state.days[ui.day];
+  const list = LIB.concat(state.custom).filter(it=>!it.m && !it.k.includes("travel") && cityOk(it,d) && !d.acts.includes(it.id));
+  openSheet(`Add a stop · ${label(d)}`, ownBox("act") + grouped(list, d, "pickact", ""));
+}
+function ownBox(kind, m){
+  return `<form class="own" data-kind="${kind}" data-m="${m||""}" id="ownform"><input id="owninput" type="text" placeholder="Add your own place" aria-label="Add your own place" maxlength="80"><button class="btn primary" type="submit">Add</button></form>`;
+}
+function sheetSwap(){
+  const i = ui.day, d = state.days[i];
+  const opts = state.days.map((x,j)=>({x,j})).filter(o=>o.j!==i && !o.x.locked && !o.x.travel && o.x.cities[0]===d.cities[0]);
+  let body = `<p class="lead">Swaps everything on ${label(d)} with the day you pick. Dates stay put; plans trade places.</p>`;
+  body += opts.map(o=>{
+    const after = conflictsIf(d, o.x.date).concat(conflictsIf(o.x, d.date));
+    return `<button class="pick" data-act="doswap" data-j="${o.j}"><div class="act-body"><strong>${label(o.x)} · ${esc(o.x.title)}</strong><p>${o.x.acts.map(id=>item(id)?.n).filter(Boolean).join(", ")||"Nothing planned"}</p>${after.length?`<div class="tags">${after.map(it=>`<span class="tag closed">${esc(it.n)}: ${esc(closedTag(it))}</span>`).join("")}</div>`:`<div class="tags"><span class="tag">No closing-day clashes</span></div>`}</div></button>`;
+  }).join("") || `<div class="emptynote">No other ${d.cities[0]==="kyoto"?"Kyoto":"Tokyo"} days can swap.</div>`;
+  const locked = state.days.filter(x=>x.locked && x.cities[0]===d.cities[0] && x!==d);
+  if(locked.length) body += `<p class="foot">${locked.map(x=>label(x)+" ("+x.locked.toLowerCase()+")").join(", ")} can't move.</p>`;
+  openSheet("Swap days", body);
+}
+function conflictsIf(d, date){ const w = new Date(date+"T00:00:00").getDay(); return planned(d).map(item).filter(it=>it && it.closed && it.closed.includes(w)); }
+function sheetMoveTo(k){
+  const i = ui.day, it = item(state.days[i].acts[k]);
+  const body = state.days.map((x,j)=>({x,j})).filter(o=>o.j!==i && cityOk(it,o.x)).map(o=>{
+    const bad = it.closed && it.closed.includes(dow(o.x));
+    return `<button class="pick" data-act="domove" data-j="${o.j}" data-k="${k}"><div class="act-body"><strong>${label(o.x)} · ${esc(o.x.title)}</strong>${bad?`<div class="tags"><span class="tag closed">${esc(closedTag(it))}</span></div>`:""}</div></button>`;
+  }).join("");
+  openSheet(`Move ${esc(it.n)}`, body);
+}
+function sheetAddTo(id){
+  const it = item(id);
+  const body = state.days.map((x,j)=>({x,j})).filter(o=>cityOk(it,o.x)).map(o=>{
+    const bad = it.closed && it.closed.includes(dow(o.x));
+    let btns;
+    if(it.m) btns = it.m.map(m=>`<button class="mini ${o.x[m]===id?"on":""}" data-act="addtodo" data-id="${id}" data-j="${o.j}" data-m="${m}" aria-label="${MEALS[m]} on ${label(o.x)}">${MEALS[m][0]}</button>`).join("");
+    else btns = `<button class="mini ${o.x.acts.includes(id)?"on":""}" data-act="addtodo" data-id="${id}" data-j="${o.j}">${o.x.acts.includes(id)?"Added":"Add"}</button>`;
+    return `<div class="card dayrow"><div class="act-body" style="flex:1"><strong>${label(o.x)} · ${esc(o.x.title)}</strong>${bad?`<div class="tags"><span class="tag closed">${esc(closedTag(it))}</span></div>`:""}</div><div class="row">${btns}</div></div>`;
+  }).join("");
+  openSheet(esc(it.n), (it.m?`<p class="lead">B, L or D sets it as that day's breakfast, lunch or dinner.</p>`:"") + body);
+}
+function sheetRename(){
+  const d = state.days[ui.day];
+  openSheet(`Rename ${label(d)}`, `<form class="own" id="renameform"><input id="renameinput" type="text" value="${esc(d.title)}" aria-label="Day name" maxlength="40"><button class="btn primary" type="submit">Save</button></form>`);
+  setTimeout(()=>{ const x=$("renameinput"); if(x){ x.focus(); x.select(); } }, 50);
+}
+function sheetReset(){
+  openSheet("Reset the plan?", `<p class="lead">This puts every day back to the original plan and clears your own places and booking ticks.</p><div class="row"><button class="btn primary" data-act="doreset">Reset everything</button><button class="btn" data-act="close">Keep my changes</button></div>`);
+}
+
+/* ---------- Actions ---------- */
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1800); }
+function commit(msg){ save(); render(); if(msg) toast(msg); }
+
+document.addEventListener("click", e=>{
+  const b = e.target.closest("[data-act]"); if(!b || b.disabled) return;
+  const a = b.dataset.act, d = state.days[ui.day];
+  const k = Number(b.dataset.k), j = Number(b.dataset.j), id = b.dataset.id;
+  switch(a){
+    case "tab": ui.tab=b.dataset.tab; window.scrollTo(0,0); render(); break;
+    case "day": ui.day=Number(b.dataset.i); ui.sel=null; window.scrollTo(0,0); render(); break;
+    case "prev": ui.day--; ui.sel=null; window.scrollTo(0,0); render(); break;
+    case "next": ui.day++; ui.sel=null; window.scrollTo(0,0); render(); break;
+    case "mark": ui.sel = ui.sel===id ? null : id; render(); break;
+    case "near": ui.near=!ui.near; ui.sel=null; render(); break;
+    case "close": closeSheet(); break;
+    case "meal": sheetMeal(b.dataset.m); break;
+    case "setmeal": d[b.dataset.m]=id; closeSheet(); commit(`${MEALS[b.dataset.m]}: ${item(id).n}`); break;
+    case "clearmeal": d[b.dataset.m]=null; closeSheet(); commit("Cleared"); break;
+    case "addact": sheetAdd(); break;
+    case "pickact": d.acts.push(id); closeSheet(); commit(`Added ${item(id).n}`); break;
+    case "quickadd": d.acts.push(id); commit(`Added ${item(id).n}`); break;
+    case "up": [d.acts[k-1],d.acts[k]]=[d.acts[k],d.acts[k-1]]; commit(); break;
+    case "down": [d.acts[k+1],d.acts[k]]=[d.acts[k],d.acts[k+1]]; commit(); break;
+    case "rm": { const n=item(d.acts[k]).n; d.acts.splice(k,1); commit(`Removed ${n}`); break; }
+    case "moveto": sheetMoveTo(k); break;
+    case "domove": { const x=d.acts.splice(k,1)[0]; const t=state.days[j]; if(!t.acts.includes(x)) t.acts.push(x); closeSheet(); commit(`Moved to ${label(t)}`); break; }
+    case "swap": sheetSwap(); break;
+    case "doswap": { const o=state.days[j]; for(const f of ["title","acts","b","l","d"]){ const t=d[f]; d[f]=o[f]; o[f]=t; } closeSheet(); commit(`Swapped ${label(d)} and ${label(o)}`); break; }
+    case "rename": sheetRename(); break;
+    case "ecity": ui.ecity=b.dataset.v; render(); break;
+    case "ecat": ui.ecat=b.dataset.v; ui.edish="all"; render(); break;
+    case "edish": ui.edish=b.dataset.v; render(); break;
+    case "addto": sheetAddTo(id); break;
+    case "addtodo": { const t=state.days[j], m=b.dataset.m;
+      if(m){ t[m] = t[m]===id ? null : id; }
+      else { const p=t.acts.indexOf(id); if(p>=0) t.acts.splice(p,1); else t.acts.push(id); }
+      save(); sheetAddTo(id); render(); toast(m?`${MEALS[m]} on ${label(t)} updated`:`${label(t)} updated`); break; }
+    case "reset": sheetReset(); break;
+    case "doreset": state=fresh(); closeSheet(); commit("Plan reset"); break;
+  }
+});
+document.addEventListener("change", e=>{
+  const c = e.target; if(c.dataset.act==="book"){ state.booked[c.dataset.id]=c.checked; commit(); }
+});
+document.addEventListener("submit", e=>{
+  e.preventDefault();
+  const f = e.target, d = state.days[ui.day];
+  if(f.id==="renameform"){ const v=$("renameinput").value.trim(); if(v){ d.title=v; closeSheet(); commit("Renamed"); } return; }
+  if(f.id==="ownform"){
+    const v=$("owninput").value.trim(); if(!v) return;
+    const kind=f.dataset.kind, m=f.dataset.m;
+    const it={id:"c-"+Date.now(), n:v, c:d.cities[d.cities.length-1], a:"any", k: kind==="meal"?["food"]:["sight"], d:"Your own pick"};
+    if(kind==="meal") it.m=["b","l","d"];
+    state.custom.push(it);
+    if(kind==="meal") d[m]=it.id; else d.acts.push(it.id);
+    closeSheet(); commit(`Added ${v}`);
+  }
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && $("sheetwrap").classList.contains("open")) closeSheet(); });
+
+// swipe left/right between days
+let sx=null, sy=null;
+$("main").addEventListener("touchstart", e=>{ if(ui.tab!=="plan" || e.target.closest(".lmap")) { sx=null; return; } sx=e.touches[0].clientX; sy=e.touches[0].clientY; }, {passive:true});
+$("main").addEventListener("touchend", e=>{
+  if(sx===null) return; const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy; sx=null;
+  if(Math.abs(dx)>70 && Math.abs(dx)>Math.abs(dy)*1.5){
+    if(dx<0 && ui.day<state.days.length-1) ui.day++; else if(dx>0 && ui.day>0) ui.day--; else return;
+    ui.sel=null; window.scrollTo(0,0); render();
+  }
+}, {passive:true});
+
+render();
+</script>
+</body>
+</html>
