@@ -621,8 +621,16 @@ function initLeaflet(d){
   const el = document.getElementById("lmap"); if(!el || !window.L) return;
   const hc = hotelCity(d), H = HOTELS[hc];
   lmap = L.map(el, {scrollWheelZoom:false, zoomControl:true});
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {maxZoom:19, subdomains:"abcd",
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}).addTo(lmap);
+  // OpenStreetMap tiles (no key needed); if they fail, fall back to the OSM France humanitarian style.
+  const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(lmap);
+  let tileErrs = 0, swapped = false;
+  osm.on("tileerror", ()=>{
+    if(swapped || ++tileErrs < 4) return;
+    swapped = true; lmap.removeLayer(osm);
+    L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {maxZoom:19, subdomains:"abc",
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://www.openstreetmap.fr/">OSM France</a>'}).addTo(lmap);
+  });
   const pin = (cls, html) => L.divIcon({className:"", html:`<div class="pin ${cls}">${html}</div>`, iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16]});
   const house = '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>';
   L.marker(H.ll, {icon:pin("pin-h "+hc, house), zIndexOffset:1000, title:"Your hotel"}).addTo(lmap).bindPopup(`<div class="pop"><strong>${esc(H.n)}</strong><div class="pop-d">${esc(H.near)}</div></div>`);
@@ -664,7 +672,7 @@ function renderBook(){
   let h = `<p class="lead">${done} of ${BOOKINGS.length} done. Disney and Puroland first: both sell dated tickets online.</p><div class="sec">`;
   h += BOOKINGS.map(b=>`<div class="card book ${state.booked[b.id]?"done":""}"><input type="checkbox" id="bk-${b.id}" data-act="book" data-id="${b.id}" ${state.booked[b.id]?"checked":""}><label for="bk-${b.id}"><strong>${esc(b.n)}</strong><p>${esc(b.p)} <a href="${b.u}" target="_blank" rel="noopener">Open site</a></p></label></div>`).join("");
   h += `</div><div class="sec"><h3>Your plan</h3><p class="lead">Changes save on this phone only.</p><button class="btn" data-act="reset" style="align-self:flex-start">Reset to the original plan</button></div>
-  <p class="foot">Hours and closing days are a guide; check before you go.<br>Photos come from Wikipedia and Wikimedia Commons. Restaurant photos show the dish, not that exact shop. Map &copy; OpenStreetMap contributors, &copy; CARTO.</p>`;
+  <p class="foot">Hours and closing days are a guide; check before you go.<br>Photos come from Wikipedia and Wikimedia Commons. Restaurant photos show the dish, not that exact shop. Map &copy; OpenStreetMap contributors.</p>`;
   $("main").innerHTML = h;
 }
 
