@@ -157,6 +157,7 @@ nav.tabs button.on{color:var(--accent);background:var(--accent-soft)}
 .sug .lnks{margin-top:8px}
 .lnk{font-size:13px;font-weight:700;color:var(--tokyo);text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:7px 9px;background:var(--paper);min-height:36px;display:inline-flex;align-items:center}
 .act-tools{flex-wrap:wrap;align-items:center}
+.act-tools .lnks{flex-basis:100%;margin-bottom:2px}
 .gmap{text-decoration:none;justify-content:center;width:100%;min-height:48px;font-size:15px}
 .tag.who-kids{background:#fde4ef;color:#a3215e;border-color:transparent}
 .tag.who-dad{background:#fff0d6;color:#9a4b00;border-color:transparent}
@@ -441,7 +442,17 @@ function cityWord(it, d){ return it.c==="kyoto" ? "Kyoto" : it.c==="tokyo" ? "To
 function links(it, d){
   const q = encodeURIComponent(it.n.replace(/\(.*?\)/g,"")+" "+cityWord(it,d));
   const map = COORDS[it.id] ? `https://www.google.com/maps/search/?api=1&query=${COORDS[it.id][0]},${COORDS[it.id][1]}` : `https://www.google.com/maps/search/?api=1&query=${q}`;
-  return `<a class="lnk" href="https://www.google.com/search?tbm=isch&q=${q}" target="_blank" rel="noopener">Photos</a><a class="lnk" href="${map}" target="_blank" rel="noopener">Map</a>`;
+  return `<a class="lnk" href="${map}" target="_blank" rel="noopener">Google Maps</a><a class="lnk" href="https://www.google.com/search?tbm=isch&q=${q}" target="_blank" rel="noopener">Photos</a><a class="lnk" href="${readMore(it,d)}" target="_blank" rel="noopener">Read more</a>`;
+}
+const OFFICIAL = {"t-dbstore":"https://en.dragon-ball-official.com/news/01_3718.html","t-pokepark":"https://www.pokepark-kanto.co.jp/","t-puroland":"https://en.puroland.jp/",
+ "t-disney":"https://www.tokyodisneyresort.jp/en/tdl/","t-teamlab":"https://www.teamlab.art/e/planets/","t-ghibli":"https://www.ghibli-museum.jp/en/",
+ "k-nintendo":"https://museum.nintendo.com/en/","t-otafuku":"https://www.otafuku.ne.jp/","t-shinkansen":"https://smart-ex.jp/en/"};
+const READWIKI = new Set(["k-manga","k-nishiki","k-inari","k-nijo","k-kiyomizu","k-gion","k-arashiyama","k-railway","k-gosho","t-tower","t-kiddy","t-scramble",
+ "t-mandarake","t-ueno","t-sensoji","t-skytree","t-nakano","t-joypolis","t-animate","t-sunaq","t-tsukiji","t-omoide","t-asasnack"]);
+function readMore(it, d){
+  if(OFFICIAL[it.id]) return OFFICIAL[it.id];
+  if(READWIKI.has(it.id) && WIKI[it.id]) return "https://en.wikipedia.org/w/index.php?search="+encodeURIComponent(WIKI[it.id]);
+  return "https://www.google.com/search?q="+encodeURIComponent(it.n.replace(/\(.*?\)/g,"")+" "+cityWord(it,d));
 }
 function tagsFor(it, d, showWhere){
   let t = "";
